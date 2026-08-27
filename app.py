@@ -20,89 +20,363 @@ st.set_page_config(
 
 load_dotenv()
 
-# Inject Custom CSS for dark-themed high-contrast HITL interface
+# Inject Custom CSS for a polished, corporate-grade dark HITL interface
 st.markdown("""
 <style>
-    /* Main Background & Text */
-    .stApp {
-        background-color: #0b0f17;
-        color: #e2e8f0;
+    /* ---------------------------------------------------------------- */
+    /* Fonts                                                             */
+    /* ---------------------------------------------------------------- */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+    html, body, [class*="css"] {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
-    
-    /* Top Banner Header */
+
+    code, pre, .stCodeBlock, [data-testid="stMetricValue"] {
+        font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* Global app background & palette                                   */
+    /* ---------------------------------------------------------------- */
+    :root {
+        --bg-primary: #0a0e16;
+        --bg-secondary: #10151f;
+        --surface: #161d2b;
+        --surface-alt: #1c2536;
+        --border-subtle: #26304433;
+        --border: #2a3549;
+        --accent: #3b82f6;
+        --accent-soft: #60a5fa;
+        --accent-glow: rgba(59, 130, 246, 0.25);
+        --success: #10b981;
+        --success-soft: #34d399;
+        --warning: #f59e0b;
+        --warning-soft: #fbbf24;
+        --text-primary: #e8edf5;
+        --text-secondary: #94a3b8;
+        --text-muted: #64748b;
+    }
+
+    .stApp {
+        background: radial-gradient(circle at top left, #0d1320 0%, #090c13 60%), var(--bg-primary);
+        color: var(--text-primary);
+    }
+
+    /* Tighten default top padding for a denser, app-like feel */
+    .block-container {
+        padding-top: 1.6rem;
+        padding-bottom: 2.5rem;
+        max-width: 1400px;
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* Sidebar                                                            */
+    /* ---------------------------------------------------------------- */
+    section[data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #0d1320 0%, #0a0e16 100%);
+        border-right: 1px solid var(--border);
+    }
+    section[data-testid="stSidebar"] .block-container {
+        padding-top: 2rem;
+    }
+    section[data-testid="stSidebar"] h1 {
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        letter-spacing: 0.3px;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 14px;
+        margin-bottom: 18px;
+    }
+    section[data-testid="stSidebar"] label {
+        font-weight: 600;
+        color: var(--text-secondary) !important;
+        font-size: 0.82rem;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+    }
+
+    /* File uploader */
+    [data-testid="stFileUploaderDropzone"] {
+        background: var(--surface);
+        border: 1.5px dashed var(--border);
+        border-radius: 12px;
+        transition: border-color 0.2s ease, background 0.2s ease;
+    }
+    [data-testid="stFileUploaderDropzone"]:hover {
+        border-color: var(--accent);
+        background: var(--surface-alt);
+    }
+
+    /* Radio nav styled like segmented tabs */
+    div[role="radiogroup"] {
+        gap: 6px;
+    }
+    div[role="radiogroup"] label {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 10px 12px !important;
+        margin-bottom: 4px;
+        transition: all 0.15s ease;
+        text-transform: none !important;
+        font-size: 0.9rem !important;
+        font-weight: 500 !important;
+        color: var(--text-primary) !important;
+    }
+    div[role="radiogroup"] label:hover {
+        border-color: var(--accent-soft);
+        background: var(--surface-alt);
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* Top Banner Header                                                  */
+    /* ---------------------------------------------------------------- */
     .top-header {
-        background: linear-gradient(90deg, #1e293b 0%, #0f172a 100%);
-        border: 1px solid #334155;
-        border-radius: 10px;
-        padding: 16px 24px;
-        margin-bottom: 20px;
+        background: linear-gradient(90deg, #131b2c 0%, #0c111c 100%);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 20px 28px;
+        margin-bottom: 24px;
         display: flex;
         justify-content: space-between;
         align-items: center;
+        box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
     }
     .header-title {
-        font-size: 18px;
+        font-size: 17px;
         font-weight: 700;
-        letter-spacing: 1px;
-        color: #60a5fa;
+        letter-spacing: 0.8px;
+        color: var(--accent-soft);
         text-transform: uppercase;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .header-subtitle {
+        font-size: 12.5px;
+        color: var(--text-muted);
+        margin-top: 4px;
+        letter-spacing: 0.2px;
+        text-transform: none;
+        font-weight: 400;
     }
     .status-pill {
-        background-color: #064e3b;
-        color: #34d399;
-        border: 1px solid #059669;
-        padding: 4px 12px;
-        border-radius: 20px;
+        background-color: rgba(16, 185, 129, 0.12);
+        color: var(--success-soft);
+        border: 1px solid rgba(16, 185, 129, 0.4);
+        padding: 6px 16px;
+        border-radius: 999px;
         font-size: 12px;
         font-weight: 600;
+        letter-spacing: 0.3px;
+        white-space: nowrap;
+    }
+    .status-pill::before {
+        content: '';
     }
 
-    /* Auto approval status box */
+    /* ---------------------------------------------------------------- */
+    /* Approval status banners                                           */
+    /* ---------------------------------------------------------------- */
     .approval-box-success {
-        background-color: rgba(16, 185, 129, 0.1);
-        border: 1px solid #10b981;
-        color: #34d399;
-        padding: 12px 18px;
-        border-radius: 8px;
+        background: linear-gradient(90deg, rgba(16, 185, 129, 0.12) 0%, rgba(16, 185, 129, 0.04) 100%);
+        border: 1px solid rgba(16, 185, 129, 0.45);
+        color: var(--success-soft);
+        padding: 14px 20px;
+        border-radius: 10px;
         font-size: 14px;
         font-weight: 600;
-        margin-bottom: 20px;
+        margin-bottom: 22px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        box-shadow: 0 2px 12px rgba(16, 185, 129, 0.08);
     }
     .approval-box-warning {
-        background-color: rgba(245, 158, 11, 0.1);
-        border: 1px solid #f59e0b;
-        color: #fbbf24;
-        padding: 12px 18px;
-        border-radius: 8px;
+        background: linear-gradient(90deg, rgba(245, 158, 11, 0.14) 0%, rgba(245, 158, 11, 0.04) 100%);
+        border: 1px solid rgba(245, 158, 11, 0.45);
+        color: var(--warning-soft);
+        padding: 14px 20px;
+        border-radius: 10px;
         font-size: 14px;
         font-weight: 600;
-        margin-bottom: 20px;
+        margin-bottom: 22px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        box-shadow: 0 2px 12px rgba(245, 158, 11, 0.08);
     }
 
-    /* Cards & Containers */
+    /* ---------------------------------------------------------------- */
+    /* Cards & Containers (native st.container(border=True) styling)     */
+    /* ---------------------------------------------------------------- */
     .card-container {
-        background-color: #1e293b;
-        border: 1px solid #334155;
+        background-color: var(--surface);
+        border: 1px solid var(--border);
         border-radius: 10px;
         padding: 20px;
     }
 
-    /* Badge tags */
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        background: var(--surface);
+        border: 1px solid var(--border) !important;
+        border-radius: 14px !important;
+        box-shadow: 0 2px 16px rgba(0, 0, 0, 0.25);
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"] > div {
+        padding: 4px 2px;
+    }
+
+    /* Section subheaders */
+    h3, .stMarkdown h3 {
+        font-size: 1.02rem !important;
+        font-weight: 700 !important;
+        color: var(--text-primary) !important;
+        letter-spacing: 0.2px;
+        border-bottom: 1px solid var(--border-subtle);
+        padding-bottom: 10px;
+        margin-bottom: 14px !important;
+    }
+    h4, .stMarkdown h4 {
+        font-size: 0.88rem !important;
+        font-weight: 700 !important;
+        color: var(--text-secondary) !important;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        margin-top: 6px !important;
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* Badges                                                             */
+    /* ---------------------------------------------------------------- */
     .confidence-badge-green {
-        background-color: #064e3b;
-        color: #6ee7b7;
+        background-color: rgba(16, 185, 129, 0.14);
+        color: var(--success-soft);
+        border: 1px solid rgba(16, 185, 129, 0.35);
         font-size: 11px;
-        padding: 2px 8px;
-        border-radius: 4px;
-        font-weight: 600;
+        padding: 3px 10px;
+        border-radius: 6px;
+        font-weight: 700;
+        letter-spacing: 0.3px;
     }
     .confidence-badge-amber {
-        background-color: #78350f;
-        color: #fde68a;
+        background-color: rgba(245, 158, 11, 0.16);
+        color: var(--warning-soft);
+        border: 1px solid rgba(245, 158, 11, 0.35);
         font-size: 11px;
-        padding: 2px 8px;
-        border-radius: 4px;
-        font-weight: 600;
+        padding: 3px 10px;
+        border-radius: 6px;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* Inputs                                                             */
+    /* ---------------------------------------------------------------- */
+    .stTextInput input, .stTextArea textarea {
+        background-color: var(--surface-alt) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 8px !important;
+        color: var(--text-primary) !important;
+        font-size: 0.9rem !important;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .stTextInput input:focus, .stTextArea textarea:focus {
+        border-color: var(--accent) !important;
+        box-shadow: 0 0 0 3px var(--accent-glow) !important;
+    }
+    .stTextInput label {
+        font-size: 0.78rem !important;
+        font-weight: 600 !important;
+        color: var(--text-secondary) !important;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* Buttons                                                            */
+    /* ---------------------------------------------------------------- */
+    .stButton button, .stDownloadButton button {
+        border-radius: 9px !important;
+        font-weight: 600 !important;
+        font-size: 0.9rem !important;
+        padding: 0.55rem 1.2rem !important;
+        border: 1px solid var(--border) !important;
+        transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease !important;
+        letter-spacing: 0.2px;
+    }
+    .stButton button:hover, .stDownloadButton button:hover {
+        transform: translateY(-1px);
+        border-color: var(--accent-soft) !important;
+        box-shadow: 0 4px 14px rgba(59, 130, 246, 0.18);
+    }
+    .stButton button[kind="primary"] {
+        background: linear-gradient(90deg, #2563eb 0%, #3b82f6 100%) !important;
+        border: none !important;
+        color: white !important;
+        box-shadow: 0 3px 14px rgba(37, 99, 235, 0.3);
+    }
+    .stButton button[kind="primary"]:hover {
+        box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* Expanders                                                          */
+    /* ---------------------------------------------------------------- */
+    .streamlit-expanderHeader, details summary {
+        background-color: var(--surface-alt) !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        color: var(--text-primary) !important;
+        border: 1px solid var(--border) !important;
+    }
+    div[data-testid="stExpander"] {
+        border: none !important;
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* Data editor / dataframe                                           */
+    /* ---------------------------------------------------------------- */
+    [data-testid="stDataFrame"], [data-testid="stDataEditor"] {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* Alerts (st.warning / st.info / st.success / st.error)             */
+    /* ---------------------------------------------------------------- */
+    div[data-testid="stAlert"] {
+        border-radius: 10px !important;
+        font-size: 0.88rem !important;
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* Dividers                                                           */
+    /* ---------------------------------------------------------------- */
+    hr {
+        border-color: var(--border-subtle) !important;
+        margin: 1.4rem 0 !important;
+    }
+
+    /* ---------------------------------------------------------------- */
+    /* Responsive tweaks                                                  */
+    /* ---------------------------------------------------------------- */
+    @media (max-width: 900px) {
+        .top-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 10px;
+        }
+        .header-title {
+            font-size: 15px;
+        }
+        .block-container {
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -177,11 +451,9 @@ def extract_all_invoice_fields(image: Image.Image) -> dict:
     )
 
     clean_text = response.text.strip()
-    if clean_text.startswith("
-```json"):
+    if clean_text.startswith("```json"):
         clean_text = clean_text[7:]
-    if clean_text.endswith("
-```"):
+    if clean_text.endswith("```"):
         clean_text = clean_text[:-3]
 
     return json.loads(clean_text)
@@ -208,7 +480,10 @@ mode = st.sidebar.radio(
 # -----------------------------------------------------------------------------
 st.markdown("""
 <div class="top-header">
-    <div class="header-title">Multimodal VLM • Side-by-Side HITL Inspection</div>
+    <div>
+        <div class="header-title">📄 Multimodal VLM &nbsp;•&nbsp; Side-by-Side HITL Inspection</div>
+        <div class="header-subtitle">Zero-shot multimodal extraction with confidence-gated human verification</div>
+    </div>
     <div class="status-pill">● Pipeline Active</div>
 </div>
 """, unsafe_allow_html=True)
@@ -258,74 +533,76 @@ if uploaded_file is not None:
 
     # Column 1: Document View
     with col_doc:
-        st.subheader("📄 Original Ingested Document")
-        st.image(img, use_container_width=True)
+        with st.container(border=True):
+            st.subheader("📄 Original Ingested Document")
+            st.image(img, use_container_width=True)
 
     # Column 2: Human-in-the-Loop Panel
     with col_panel:
-        st.subheader("✏️ Human-in-the-Loop Verification")
-        
-        st.write(f"**Document Type Identified:** `{data.get('document_type', 'Invoice')}`")
+        with st.container(border=True):
+            st.subheader("✏️ Human-in-the-Loop Verification")
 
-        # Dynamic Field Editing
-        extracted = data.get("extracted_fields", {})
-        updated_fields = {}
+            st.write(f"**Document Type Identified:** `{data.get('document_type', 'Invoice')}`")
 
-        st.markdown("#### Discovered Metadata Fields")
-        field_cols = st.columns(2)
-        idx = 0
-        for field_name, field_value in extracted.items():
-            c = field_cols[idx % 2]
-            with c:
-                updated_fields[field_name] = st.text_input(
-                    label=field_name,
-                    value=str(field_value),
-                    key=f"input_{field_name}"
+            # Dynamic Field Editing
+            extracted = data.get("extracted_fields", {})
+            updated_fields = {}
+
+            st.markdown("#### Discovered Metadata Fields")
+            field_cols = st.columns(2)
+            idx = 0
+            for field_name, field_value in extracted.items():
+                c = field_cols[idx % 2]
+                with c:
+                    updated_fields[field_name] = st.text_input(
+                        label=field_name,
+                        value=str(field_value),
+                        key=f"input_{field_name}"
+                    )
+                idx += 1
+
+            # Line Items Section
+            line_items = data.get("line_items", [])
+            if line_items:
+                with st.expander("📦 Itemized Line Items Table", expanded=True):
+                    df_items = pd.DataFrame(line_items)
+                    edited_df = st.data_editor(df_items, num_rows="dynamic", use_container_width=True)
+
+            # Verification Flags (Warnings)
+            flags = data.get("verification_flags", [])
+            if flags:
+                st.markdown("#### 🚩 Verification Alerts")
+                for flag in flags:
+                    st.warning(f"**Field**: `{flag.get('field')}` | **Value**: `{flag.get('value')}`\n\n*Reason*: {flag.get('reason')}")
+
+            # Missing Standard Fields Registry
+            missing = data.get("missing_standard_fields", [])
+            if missing:
+                with st.expander("ℹ️ Missing Standard Invoice Fields"):
+                    st.info("The following standard fields were not physically present on this document:\n\n- " + "\n- ".join(missing))
+
+            # Actions
+            st.markdown("---")
+            b1, b2 = st.columns(2)
+            with b1:
+                if st.button("💾 Confirm & Commit Record", type="primary", use_container_width=True):
+                    final_record = {
+                        "filename": uploaded_file.name,
+                        "extracted_fields": updated_fields,
+                        "line_items": line_items,
+                        "confidence": overall_conf
+                    }
+                    st.success("Record committed successfully to database!")
+                    st.json(final_record)
+            with b2:
+                export_payload = json.dumps(data, indent=2)
+                st.download_button(
+                    "📥 Export Full JSON",
+                    data=export_payload,
+                    file_name=f"extracted_{uploaded_file.name}.json",
+                    mime="application/json",
+                    use_container_width=True
                 )
-            idx += 1
-
-        # Line Items Section
-        line_items = data.get("line_items", [])
-        if line_items:
-            with st.expander("📦 Itemized Line Items Table", expanded=True):
-                df_items = pd.DataFrame(line_items)
-                edited_df = st.data_editor(df_items, num_rows="dynamic", use_container_width=True)
-
-        # Verification Flags (Warnings)
-        flags = data.get("verification_flags", [])
-        if flags:
-            st.markdown("#### 🚩 Verification Alerts")
-            for flag in flags:
-                st.warning(f"**Field**: `{flag.get('field')}` | **Value**: `{flag.get('value')}`\n\n*Reason*: {flag.get('reason')}")
-
-        # Missing Standard Fields Registry
-        missing = data.get("missing_standard_fields", [])
-        if missing:
-            with st.expander("ℹ️ Missing Standard Invoice Fields"):
-                st.info("The following standard fields were not physically present on this document:\n\n- " + "\n- ".join(missing))
-
-        # Actions
-        st.markdown("---")
-        b1, b2 = st.columns(2)
-        with b1:
-            if st.button("💾 Confirm & Commit Record", type="primary", use_container_width=True):
-                final_record = {
-                    "filename": uploaded_file.name,
-                    "extracted_fields": updated_fields,
-                    "line_items": line_items,
-                    "confidence": overall_conf
-                }
-                st.success("Record committed successfully to database!")
-                st.json(final_record)
-        with b2:
-            export_payload = json.dumps(data, indent=2)
-            st.download_button(
-                "📥 Export Full JSON",
-                data=export_payload,
-                file_name=f"extracted_{uploaded_file.name}.json",
-                mime="application/json",
-                use_container_width=True
-            )
 
 else:
     st.info("👈 Please upload an invoice PDF or image in the sidebar to begin extraction.")
