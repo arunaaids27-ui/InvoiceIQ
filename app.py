@@ -1,442 +1,331 @@
-import streamlit as st
-import tempfile
 import os
 import json
 import pandas as pd
+import streamlit as st
 from PIL import Image
 import fitz  # PyMuPDF
+from google import genai
+from google.genai import types
+from dotenv import load_dotenv
 
-from storage.db_manager import save_invoice_record, get_all_invoices, get_all_line_items
-from categorization.expense_categorizer import categorize_invoice_items
-from vlm_extraction.invoice_extractor import extract_invoice_data
-from confidence.confidence_scorer import (
-    score_invoice_confidence,
-    requires_manual_review,
-    AUTO_APPROVE_THRESHOLD,
-)
-
-# ============================================================
-# PAGE CONFIGURATION & ENTERPRISE DARK SAAS CSS
-# ============================================================
+# -----------------------------------------------------------------------------
+# 1. Page Configuration & Custom Styling
+# -----------------------------------------------------------------------------
 st.set_page_config(
-    page_title="InvoiceIQ Enterprise | Multimodal VLM",
-    page_icon="⚡",
+    page_title="InvoiceIQ - Open-Schema Multimodal Extraction",
+    page_icon="📄",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
+load_dotenv()
+
+# Inject Custom CSS for dark-themed high-contrast HITL interface
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
-
-    html, body, [class*="css"], .stMarkdown {
-        font-family: 'Plus Jakarta Sans', sans-serif !important;
+    /* Main Background & Text */
+    .stApp {
+        background-color: #0b0f17;
+        color: #e2e8f0;
     }
     
-    code, pre {
-        font-family: 'JetBrains Mono', monospace !important;
-    }
-
-    .stApp {
-        background: radial-gradient(circle at 50% 0%, #171E31 0%, #070A12 100%) !important;
-        color: #F8FAFC !important;
-    }
-
-    section[data-testid="stSidebar"] {
-        background-color: #0B0F19 !important;
-        border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
-        padding-top: 1rem !important;
-    }
-
-    .top-header-bar {
+    /* Top Banner Header */
+    .top-header {
+        background: linear-gradient(90deg, #1e293b 0%, #0f172a 100%);
+        border: 1px solid #334155;
+        border-radius: 10px;
+        padding: 16px 24px;
+        margin-bottom: 20px;
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 0.9rem 1.4rem;
-        background: rgba(18, 24, 42, 0.75);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 14px;
-        margin-bottom: 1.5rem;
-        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
     }
-
-    .status-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        background: rgba(16, 185, 129, 0.12);
-        border: 1px solid rgba(16, 185, 129, 0.35);
-        color: #34D399;
-        padding: 5px 14px;
-        border-radius: 9999px;
-        font-size: 0.78rem;
+    .header-title {
+        font-size: 18px;
         font-weight: 700;
-        letter-spacing: 0.03em;
+        letter-spacing: 1px;
+        color: #60a5fa;
+        text-transform: uppercase;
     }
-
-    .pulse-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background-color: #10B981;
-        box-shadow: 0 0 10px #10B981;
-    }
-
-    .glass-card {
-        background: rgba(18, 24, 42, 0.65);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 16px;
-        padding: 1.5rem;
-        margin-bottom: 1.5rem;
-        backdrop-filter: blur(10px);
-    }
-
-    .banner-high {
-        background: linear-gradient(135deg, rgba(16, 185, 129, 0.18) 0%, rgba(5, 150, 105, 0.05) 100%);
-        border: 1px solid rgba(16, 185, 129, 0.45);
-        color: #34D399;
-        padding: 14px 20px;
-        border-radius: 14px;
+    .status-pill {
+        background-color: #064e3b;
+        color: #34d399;
+        border: 1px solid #059669;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
         font-weight: 600;
-        margin-bottom: 1.4rem;
     }
 
-    .banner-mod {
-        background: linear-gradient(135deg, rgba(245, 158, 11, 0.18) 0%, rgba(217, 119, 6, 0.05) 100%);
-        border: 1px solid rgba(245, 158, 11, 0.45);
-        color: #FBBF24;
-        padding: 14px 20px;
-        border-radius: 14px;
+    /* Auto approval status box */
+    .approval-box-success {
+        background-color: rgba(16, 185, 129, 0.1);
+        border: 1px solid #10b981;
+        color: #34d399;
+        padding: 12px 18px;
+        border-radius: 8px;
+        font-size: 14px;
         font-weight: 600;
-        margin-bottom: 1.4rem;
+        margin-bottom: 20px;
     }
-
-    .banner-low {
-        background: linear-gradient(135deg, rgba(239, 68, 68, 0.18) 0%, rgba(185, 28, 28, 0.05) 100%);
-        border: 1px solid rgba(239, 68, 68, 0.45);
-        color: #F87171;
-        padding: 14px 20px;
-        border-radius: 14px;
+    .approval-box-warning {
+        background-color: rgba(245, 158, 11, 0.1);
+        border: 1px solid #f59e0b;
+        color: #fbbf24;
+        padding: 12px 18px;
+        border-radius: 8px;
+        font-size: 14px;
         font-weight: 600;
-        margin-bottom: 1.4rem;
+        margin-bottom: 20px;
     }
 
-    div[data-testid="stMetric"] {
-        background: rgba(18, 24, 42, 0.75) !important;
-        border: 1px solid rgba(255, 255, 255, 0.08) !important;
-        border-radius: 14px !important;
-        padding: 16px 20px !important;
+    /* Cards & Containers */
+    .card-container {
+        background-color: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 10px;
+        padding: 20px;
     }
 
-    button[kind="primary"], .stDownloadButton>button {
-        background: linear-gradient(135deg, #6366F1 0%, #4F46E5 100%) !important;
-        color: #FFFFFF !important;
-        border: none !important;
-        border-radius: 8px !important;
-        font-weight: 600 !important;
+    /* Badge tags */
+    .confidence-badge-green {
+        background-color: #064e3b;
+        color: #6ee7b7;
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-weight: 600;
     }
-
-    /* 🟢 Green / ⚪ N/A / 🔴 Red Dynamic HITL Border Highlighting */
-    .field-verified {
-        border-left: 4px solid #10B981 !important;
-        background: rgba(16, 185, 129, 0.08);
-        padding: 6px 10px;
-        border-radius: 6px;
-        margin-bottom: 4px;
-        font-size: 0.8rem;
-    }
-
-    .field-na {
-        border-left: 4px solid #64748B !important;
-        background: rgba(100, 116, 139, 0.08);
-        padding: 6px 10px;
-        border-radius: 6px;
-        margin-bottom: 4px;
-        font-size: 0.8rem;
-    }
-
-    .field-warning {
-        border-left: 4px solid #EF4444 !important;
-        background: rgba(239, 68, 68, 0.12);
-        padding: 6px 10px;
-        border-radius: 6px;
-        margin-bottom: 4px;
-        font-size: 0.8rem;
-        animation: pulse-red 2s infinite;
-    }
-
-    @keyframes pulse-red {
-        0%, 100% { box-shadow: 0 0 0px rgba(239, 68, 68, 0); }
-        50% { box-shadow: 0 0 8px rgba(239, 68, 68, 0.35); }
+    .confidence-badge-amber {
+        background-color: #78350f;
+        color: #fde68a;
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-weight: 600;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Helper function to get image preview from PDF or Image
-def get_preview_image(uploaded_file):
-    try:
-        uploaded_file.seek(0)
-        file_bytes = uploaded_file.read()
-        if uploaded_file.name.lower().endswith(".pdf"):
-            doc = fitz.open(stream=file_bytes, filetype="pdf")
-            page = doc.load_page(0)
-            pix = page.get_pixmap(dpi=150)
-            return Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-        else:
-            uploaded_file.seek(0)
-            return Image.open(uploaded_file)
-    except Exception:
-        return None
 
-# Session State Initialization
-if "extracted_data" not in st.session_state: st.session_state["extracted_data"] = None
-if "confidence_result" not in st.session_state: st.session_state["confidence_result"] = None
-if "current_file_name" not in st.session_state: st.session_state["current_file_name"] = None
-if "verified_data" not in st.session_state: st.session_state["verified_data"] = None
+# -----------------------------------------------------------------------------
+# 2. VLM Extraction Core Function (Comprehensive Dynamic Discovery)
+# -----------------------------------------------------------------------------
+def extract_all_invoice_fields(image: Image.Image) -> dict:
+    """
+    Extracts all visible fields dynamically from an invoice image using Gemini Flash.
+    Does NOT limit extraction to fixed 6 fields. Discovers header values, tabular items,
+    missing standard fields, and flags items needing verification.
+    """
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError("GEMINI_API_KEY is missing from environment or .env file.")
 
-# Sidebar Ingestion
-with st.sidebar:
-    st.markdown("""
-        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 1.2rem;">
-            <div style="background: linear-gradient(135deg, #6366F1, #4F46E5); padding: 8px 12px; border-radius: 10px; font-weight: 800; font-size: 1.1rem; color: white;">⚡ IQ</div>
-            <div>
-                <div style="font-weight: 800; font-size: 1.05rem; color: #FFFFFF;">DocuFlow AI</div>
-                <div style="font-size: 0.75rem; color: #64748B;">Multimodal AP Pipeline</div>
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
-    st.markdown("---")
-    st.markdown("##### 📁 DOCUMENT INGESTION")
-    uploaded_file = st.file_uploader("Upload Invoice (PDF, PNG, JPG)", type=["pdf", "png", "jpg", "jpeg"], label_visibility="collapsed")
-    st.markdown("---")
-    st.markdown("##### 📑 RECENT RECORDS IN DB")
-    recent_invoices = get_all_invoices()
-    if recent_invoices:
-        for inv in recent_invoices[:4]:
-            stat_icon = "🟢" if "AUTO" in inv.get("review_status", "") else "🟠"
-            st.markdown(f"**{inv.get('vendor_name') or 'Vendor'}** - `${inv.get('total_amount', 0)}` {stat_icon}")
-    else:
-        st.caption("No historical records found.")
+    client = genai.Client(api_key=api_key)
 
-# Main Header
+    system_prompt = """
+    You are an expert Vision Document Parsing Engine.
+    Examine the provided document image and extract EVERY SINGLE printed field without layout restrictions.
+
+    Instructions:
+    1. Identify all header fields (Vendor name, addresses, phone numbers, tax IDs, invoice number, dates, payment terms, payment method, cashier ID, PO number, etc.).
+    2. Extract all line items tabular data (description, quantity, unit price, tax code, total).
+    3. Calculate total summaries (subtotal, taxes, discounts, grand total, cash paid, change returned).
+    4. Detect standard invoice fields that are missing from this document.
+    5. Evaluate confidence score (0-100) and flag any ambiguous, low-quality, or handwritten fields for human review.
+
+    Return strictly a JSON object matching this schema:
+    {
+        "document_type": "Tax Invoice / Receipt / Bill",
+        "overall_confidence": 90,
+        "requires_human_review": false,
+        "extracted_fields": {
+            "Vendor Name": "Sample Vendor",
+            "Invoice Number": "12345",
+            "Invoice Date": "YYYY-MM-DD",
+            "Tax Amount": "0.00",
+            "Grand Total": "0.00"
+            // Include ALL other key-value pairs discovered in the document here dynamically
+        },
+        "line_items": [
+            {
+                "description": "Item description",
+                "qty": 1,
+                "unit_price": 0.0,
+                "total": 0.0
+            }
+        ],
+        "missing_standard_fields": ["due_date", "purchase_order_number"],
+        "verification_flags": [
+            {
+                "field": "Field Name",
+                "value": "Extracted Value",
+                "reason": "Handwritten / low resolution / arithmetic discrepancy"
+            }
+        ]
+    }
+    Return ONLY valid JSON. Do not surround with markdown backticks.
+    """
+
+    response = client.models.generate_content(
+        model="gemini-3.6-flash",
+        contents=[image, system_prompt],
+        config=types.GenerateContentConfig(
+            temperature=0.0,
+            response_mime_type="application/json"
+        )
+    )
+
+    clean_text = response.text.strip()
+    if clean_text.startswith("
+```json"):
+        clean_text = clean_text[7:]
+    if clean_text.endswith("
+```"):
+        clean_text = clean_text[:-3]
+
+    return json.loads(clean_text)
+
+
+# -----------------------------------------------------------------------------
+# 3. Sidebar Setup & Navigation
+# -----------------------------------------------------------------------------
+st.sidebar.title("⚙️ InvoiceIQ Studio")
+uploaded_file = st.sidebar.file_uploader(
+    "Upload Invoice / Receipt Document",
+    type=["png", "jpg", "jpeg", "webp", "pdf"],
+    help="Upload single/multi-page PDFs or image documents."
+)
+
+mode = st.sidebar.radio(
+    "Navigation Mode",
+    ["⚡ Side-by-Side HITL Inspection", "📊 Spend Analytics & Audit Log"]
+)
+
+
+# -----------------------------------------------------------------------------
+# 4. Main Page Rendering
+# -----------------------------------------------------------------------------
 st.markdown("""
-<div class="top-header-bar">
-    <span style="font-weight: 700; color: #818CF8;">MULTIMODAL VLM • SIDE-BY-SIDE HITL INSPECTION</span>
-    <div class="status-pill"><div class="pulse-dot"></div> Pipeline Active</div>
+<div class="top-header">
+    <div class="header-title">Multimodal VLM • Side-by-Side HITL Inspection</div>
+    <div class="status-pill">● Pipeline Active</div>
 </div>
 """, unsafe_allow_html=True)
 
-tab_extract, tab_analytics = st.tabs(["⚡ Document Extraction Studio", "📊 Spend Analytics & Audit Log"])
+if uploaded_file is not None:
+    # Preprocess image/PDF
+    ext = uploaded_file.name.split(".")[-1].lower()
+    if ext == "pdf":
+        doc = fitz.open(stream=uploaded_file.read(), filetype="pdf")
+        pix = doc[0].get_pixmap(dpi=150)
+        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        doc.close()
+    else:
+        img = Image.open(uploaded_file).convert("RGB")
 
-with tab_extract:
-    if not uploaded_file:
-        st.markdown("""
-            <div class="glass-card" style="text-align: center; padding: 3.5rem 1rem;">
-                <div style="font-size: 2.8rem; margin-bottom: 0.6rem;">📄</div>
-                <div style="font-weight: 800; font-size: 1.2rem; color: #F8FAFC;">No Document Ingested</div>
-                <div style="font-size: 0.88rem; color: #64748B; margin-top: 6px;">Upload an invoice from the sidebar to start side-by-side verification.</div>
-            </div>
+    # Run or retrieve extraction state
+    if "current_file" not in st.session_state or st.session_state.current_file != uploaded_file.name:
+        with st.spinner("🔍 VLM analyzing visual layout and extracting all dynamic fields..."):
+            try:
+                extraction_data = extract_all_invoice_fields(img)
+                st.session_state.extraction = extraction_data
+                st.session_state.current_file = uploaded_file.name
+            except Exception as e:
+                st.error(f"Extraction Error: {str(e)}")
+                st.stop()
+
+    data = st.session_state.extraction
+    overall_conf = data.get("overall_confidence", 85)
+    needs_review = data.get("requires_human_review", False) or overall_conf < 80
+
+    # Status Banner
+    if not needs_review:
+        st.markdown(f"""
+        <div class="approval-box-success">
+            ✅ AUTO-APPROVED ({overall_conf}% Confidence): Quality gate passed. Document ready for accounting ingestion.
+        </div>
         """, unsafe_allow_html=True)
     else:
-        if st.session_state["current_file_name"] != uploaded_file.name:
-            st.session_state["current_file_name"] = uploaded_file.name
-            st.session_state["extracted_data"] = None
-            st.session_state["confidence_result"] = None
-            st.session_state["verified_data"] = None
+        st.markdown(f"""
+        <div class="approval-box-warning">
+            ⚠️ MANUAL VERIFICATION REQUIRED ({overall_conf}% Confidence): Flagged fields require human review before saving.
+        </div>
+        """, unsafe_allow_html=True)
 
-        if st.session_state["extracted_data"] is None:
-            file_ext = os.path.splitext(uploaded_file.name)[1]
-            temp_path = None
-            try:
-                with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as tmp:
-                    tmp.write(uploaded_file.getbuffer())
-                    temp_path = tmp.name
+    # Two-Column Layout (Side-by-Side Document & Verification Panel)
+    col_doc, col_panel = st.columns([1, 1], gap="medium")
 
-                with st.spinner("🤖 Vision Model Extracting & Scoring Quality..."):
-                    raw_data = extract_invoice_data(temp_path)
-                    
-                    # RAG Categorization
-                    items = raw_data.get("line_items", [])
-                    v_name = raw_data.get("vendor_name", "")
-                    if items:
-                        raw_data["line_items"] = categorize_invoice_items(items, v_name)
-                    
-                    st.session_state["extracted_data"] = raw_data
-                    st.session_state["confidence_result"] = score_invoice_confidence(raw_data)
-                    st.session_state["verified_data"] = raw_data
-                st.success("✅ Extraction & Quality Verification Completed!")
-            except Exception as e:
-                st.error(f"❌ Error: {e}")
-            finally:
-                if temp_path and os.path.exists(temp_path): os.remove(temp_path)
+    # Column 1: Document View
+    with col_doc:
+        st.subheader("📄 Original Ingested Document")
+        st.image(img, use_container_width=True)
 
-        if st.session_state["extracted_data"] is not None:
-            extracted_data = st.session_state["extracted_data"]
-            confidence_result = st.session_state["confidence_result"]
-            current_data = st.session_state.get("verified_data") or extracted_data
-            review_info = requires_manual_review(confidence_result)
+    # Column 2: Human-in-the-Loop Panel
+    with col_panel:
+        st.subheader("✏️ Human-in-the-Loop Verification")
+        
+        st.write(f"**Document Type Identified:** `{data.get('document_type', 'Invoice')}`")
 
-            score = confidence_result.get("overall_score", 0)
-            tier = confidence_result.get("overall_tier", "LOW")
+        # Dynamic Field Editing
+        extracted = data.get("extracted_fields", {})
+        updated_fields = {}
 
-            if tier == "HIGH":
-                st.markdown(f'<div class="banner-high">✅ <b>AUTO-APPROVED ({score}% Confidence):</b> Quality gate passed. Safe for direct accounting ingestion.</div>', unsafe_allow_html=True)
-            elif tier == "MODERATE":
-                st.markdown(f'<div class="banner-mod">⚠️ <b>HUMAN REVIEW REQUIRED ({score}% Confidence):</b> Inspect red-flagged fields against the source document.</div>', unsafe_allow_html=True)
-            else:
-                st.markdown(f'<div class="banner-low">🚨 <b>CRITICAL REJECTION ({score}% Confidence):</b> Discrepancy detected. Mandatory verification required.</div>', unsafe_allow_html=True)
+        st.markdown("#### Discovered Metadata Fields")
+        field_cols = st.columns(2)
+        idx = 0
+        for field_name, field_value in extracted.items():
+            c = field_cols[idx % 2]
+            with c:
+                updated_fields[field_name] = st.text_input(
+                    label=field_name,
+                    value=str(field_value),
+                    key=f"input_{field_name}"
+                )
+            idx += 1
 
-            # ============================================================
-            # 🔍 SIDE-BY-SIDE DUAL PANE LAYOUT (ORIGINAL vs VERIFICATION FORM)
-            # ============================================================
-            col_doc_view, col_hitl_form = st.columns([1, 1.2], gap="large")
+        # Line Items Section
+        line_items = data.get("line_items", [])
+        if line_items:
+            with st.expander("📦 Itemized Line Items Table", expanded=True):
+                df_items = pd.DataFrame(line_items)
+                edited_df = st.data_editor(df_items, num_rows="dynamic", use_container_width=True)
 
-            # LEFT PANE: SOURCE DOCUMENT PREVIEW
-            with col_doc_view:
-                st.markdown("##### 📄 Original Ingested Document")
-                preview_img = get_preview_image(uploaded_file)
-                if preview_img:
-                    st.image(preview_img, use_container_width=True, caption=f"Source: {uploaded_file.name}")
-                else:
-                    st.caption("Preview unavailable for this format.")
+        # Verification Flags (Warnings)
+        flags = data.get("verification_flags", [])
+        if flags:
+            st.markdown("#### 🚩 Verification Alerts")
+            for flag in flags:
+                st.warning(f"**Field**: `{flag.get('field')}` | **Value**: `{flag.get('value')}`\n\n*Reason*: {flag.get('reason')}")
 
-            # RIGHT PANE: FIELD STATUSES & EDITABLE FORM
-            with col_hitl_form:
-                st.markdown("##### ✏️ Human-in-the-Loop Verification")
-                st.metric("Overall Extraction Confidence", f"{score}%", delta=confidence_result.get("overall_status", "LOW"))
-                
-                field_scores = confidence_result.get("field_scores", {})
-                
-                # Dynamic 3-State Label Checker (Green Verified / Grey N/A / Red Needs Review)
-                def get_field_status(field_key):
-                    f_info = field_scores.get(field_key, {})
-                    status = f_info.get("status", "VERIFIED")
-                    score_val = f_info.get("score", 0)
-                    
-                    if status in ["AUTO_ACCEPTED", "VERIFIED"]:
-                        return "field-verified", f"🟢 Verified ({score_val}%)"
-                    elif status in ["NOT_APPLICABLE", "NA"]:
-                        return "field-na", "⚪ N/A (Not on Document)"
-                    else:
-                        return "field-warning", "🔴 Missing / Needs Review"
+        # Missing Standard Fields Registry
+        missing = data.get("missing_standard_fields", [])
+        if missing:
+            with st.expander("ℹ️ Missing Standard Invoice Fields"):
+                st.info("The following standard fields were not physically present on this document:\n\n- " + "\n- ".join(missing))
 
-                def get_val(data, key): return "" if data.get(key) is None or str(data.get(key)).lower() in ["none", "null"] else str(data.get(key))
+        # Actions
+        st.markdown("---")
+        b1, b2 = st.columns(2)
+        with b1:
+            if st.button("💾 Confirm & Commit Record", type="primary", use_container_width=True):
+                final_record = {
+                    "filename": uploaded_file.name,
+                    "extracted_fields": updated_fields,
+                    "line_items": line_items,
+                    "confidence": overall_conf
+                }
+                st.success("Record committed successfully to database!")
+                st.json(final_record)
+        with b2:
+            export_payload = json.dumps(data, indent=2)
+            st.download_button(
+                "📥 Export Full JSON",
+                data=export_payload,
+                file_name=f"extracted_{uploaded_file.name}.json",
+                mime="application/json",
+                use_container_width=True
+            )
 
-                with st.form(key="hitl_dual_pane_form"):
-                    c1, t1 = get_field_status("vendor_name")
-                    st.markdown(f'<div class="{c1}"><b>Vendor Name</b> • {t1}</div>', unsafe_allow_html=True)
-                    v_vendor = st.text_input("Vendor", value=get_val(current_data, "vendor_name"), label_visibility="collapsed")
-
-                    c2, t2 = get_field_status("invoice_number")
-                    st.markdown(f'<div class="{c2}"><b>Invoice Number</b> • {t2}</div>', unsafe_allow_html=True)
-                    v_inv_num = st.text_input("Invoice Num", value=get_val(current_data, "invoice_number"), label_visibility="collapsed")
-
-                    c_d1, c_d2 = st.columns(2)
-                    with c_d1:
-                        c3, t3 = get_field_status("invoice_date")
-                        st.markdown(f'<div class="{c3}"><b>Invoice Date</b> • {t3}</div>', unsafe_allow_html=True)
-                        v_date = st.text_input("Date", value=get_val(current_data, "invoice_date"), label_visibility="collapsed")
-                    with c_d2:
-                        c4, t4 = get_field_status("due_date")
-                        st.markdown(f'<div class="{c4}"><b>Due Date</b> • {t4}</div>', unsafe_allow_html=True)
-                        v_due_date = st.text_input("Due Date", value=get_val(current_data, "due_date"), label_visibility="collapsed")
-
-                    c_a1, c_a2 = st.columns(2)
-                    with c_a1:
-                        c5, t5 = get_field_status("tax")
-                        st.markdown(f'<div class="{c5}"><b>Tax Amount</b> • {t5}</div>', unsafe_allow_html=True)
-                        v_tax = st.text_input("Tax", value=get_val(current_data, "tax"), label_visibility="collapsed")
-                    with c_a2:
-                        c6, t6 = get_field_status("total_amount")
-                        st.markdown(f'<div class="{c6}"><b>Total Amount</b> • {t6}</div>', unsafe_allow_html=True)
-                        v_total = st.text_input("Total Amount", value=get_val(current_data, "total_amount"), label_visibility="collapsed")
-
-                    st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
-                    if st.form_submit_button("💾 Confirm & Commit Record to Database", type="primary", use_container_width=True):
-                        verified_dict = dict(current_data)
-                        verified_dict["vendor_name"] = v_vendor
-                        verified_dict["invoice_number"] = v_inv_num
-                        verified_dict["invoice_date"] = v_date
-                        verified_dict["due_date"] = v_due_date
-                        try: verified_dict["tax"] = float(v_tax)
-                        except: verified_dict["tax"] = 0.0
-                        try: verified_dict["total_amount"] = float(v_total)
-                        except: verified_dict["total_amount"] = 0.0
-
-                        verified_dict["line_items"] = current_data.get("line_items", [])
-                        new_confidence = score_invoice_confidence(verified_dict)
-
-                        st.session_state["verified_data"] = verified_dict
-                        st.session_state["confidence_result"] = new_confidence
-                        st.session_state["extracted_data"] = verified_dict
-
-                        rev_status = "MANUALLY_CORRECTED" if review_info.get("needs_review") else "AUTO_VERIFIED"
-                        saved_id = save_invoice_record(
-                            invoice_data=verified_dict,
-                            confidence_score=new_confidence["overall_score"],
-                            review_status=rev_status
-                        )
-                        st.success(f"🎉 Verified Record #{saved_id} committed to Database!")
-                        st.rerun()
-
-            st.divider()
-
-            # Line Items Table & RAG Match Inspector
-            categorized_items = current_data.get("line_items", [])
-            if categorized_items:
-                st.markdown("##### 📦 Semantic Line-Item Taxonomy Routing")
-                table_rows = [{
-                    "#": i + 1,
-                    "Description": itm.get("description", "-"),
-                    "Qty": itm.get("quantity", 1),
-                    "Unit Price": f"${itm.get('unit_price', 0)}",
-                    "Total": f"${itm.get('total', 0)}",
-                    "Category": f"🏷️ {itm.get('assigned_category', 'Miscellaneous')}",
-                    "Cosine Match": f"{itm.get('category_confidence', 0)}%"
-                } for i, itm in enumerate(categorized_items)]
-                st.dataframe(table_rows, use_container_width=True)
-
-                with st.expander("🧠 Inspect RAG Vector Matching (How AI Decided)"):
-                    for idx, itm in enumerate(categorized_items, 1):
-                        st.markdown(f"**Item #{idx}:** `{itm.get('description', '-')}`")
-                        top_m = itm.get("rag_top_matches", [])
-                        if top_m:
-                            cols = st.columns(len(top_m))
-                            for c_idx, match in enumerate(top_m):
-                                with cols[c_idx]:
-                                    rank_tag = "🥇 Top Match" if c_idx == 0 else f"🥈 Rank {c_idx+1}"
-                                    border = "#10B981" if c_idx == 0 else "#475569"
-                                    st.markdown(f"""
-                                        <div style="border: 1px solid {border}; background: rgba(18,24,42,0.7); border-radius: 8px; padding: 8px 12px;">
-                                            <div style="font-size: 0.7rem; color: #94A3B8;">{rank_tag}</div>
-                                            <div style="font-size: 0.85rem; font-weight: 700; color: #F8FAFC;">{match['category']}</div>
-                                            <div style="font-size: 0.75rem; color: #34D399; font-family: monospace;">Match: {match['score']}%</div>
-                                        </div>
-                                    """, unsafe_allow_html=True)
-
-# TAB 2: ANALYTICS & AUDIT LOG
-with tab_analytics:
-    st.markdown("### 📊 Spend Analytics & Audit Log")
-    all_invoices = get_all_invoices()
-    all_items = get_all_line_items()
-
-    if not all_invoices:
-        st.info("No saved records found.")
-    else:
-        tot_count = len(all_invoices)
-        tot_spend = sum(inv.get("total_amount") or 0.0 for inv in all_invoices)
-        m1, m2 = st.columns(2)
-        m1.metric("Processed Invoices", tot_count)
-        m2.metric("Aggregated Spend", f"${tot_spend:,.2f}")
-
-        if all_items:
-            df_items = pd.DataFrame(all_items)
-            if "assigned_category" in df_items.columns and "total" in df_items.columns:
-                df_items["total"] = pd.to_numeric(df_items["total"], errors="coerce").fillna(0)
-                cat_summary = df_items.groupby("assigned_category")["total"].sum().reset_index()
-                cat_summary.columns = ["Expense Category", "Total Spend ($)"]
-                st.bar_chart(data=cat_summary.sort_values(by="Total Spend ($)", ascending=True), x="Total Spend ($)", y="Expense Category", use_container_width=True)
-
-        df_invoices = pd.DataFrame(all_invoices)[["id", "invoice_number", "vendor_name", "invoice_date", "total_amount", "overall_confidence", "review_status"]]
-        st.dataframe(df_invoices, use_container_width=True)
-        st.download_button(label="📥 Download Audit Ledger (CSV)", data=df_invoices.to_csv(index=False).encode('utf-8'), file_name="audit_ledger.csv", mime="text/csv", type="primary")
+else:
+    st.info("👈 Please upload an invoice PDF or image in the sidebar to begin extraction.")
